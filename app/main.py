@@ -72,10 +72,12 @@ app = FastAPI(
 )
 
 from app.api.runs import router as runs_router
+from app.api.apps import router as apps_router
 from app.core.errors import ReviewIntelError
 
 # Mount API routers
 app.include_router(runs_router)
+app.include_router(apps_router)
 
 
 @app.exception_handler(ReviewIntelError)
