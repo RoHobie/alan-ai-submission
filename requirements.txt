@@ -1,0 +1,23 @@
+# Core Web Framework
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+
+# Validation & Settings
+pydantic==2.14.1
+pydantic-settings==2.16.1
+
+# Persistence & Data Processing
+sqlalchemy==2.1.6
+pandas==3.1.0
+rapidfuzz==3.14.6
+python-dateutil==3.0.0
+
+# LLM & Store Scrapers
+google-genai==2.33.0
+google-play-scraper==1.2.7
+requests==2.34.2
+httpx==0.28.1
+
+# Testing
+pytest==9.1.1
+pytest-asyncio==1.4.1

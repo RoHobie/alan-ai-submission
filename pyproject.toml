@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "review-intel"
+version = "0.1.0"
+description = "Prioritized, version-aware product feedback report from mobile app store reviews"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Review Intelligence Team" }
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"

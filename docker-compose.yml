@@ -1,0 +1,25 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DATA_DIR=/app/data
+      - PORT=8000
+    volumes:
+      # Named volume persists runs, SQLite database, and LLM cache across restarts
+      - review_intel_data:/app/data
+      # Alternative local directory bind mount (uncomment if you prefer host-visible files):
+      # - ./data:/app/data
+    restart: unless-stopped
+
+volumes:
+  review_intel_data:
+    name: review_intel_data
