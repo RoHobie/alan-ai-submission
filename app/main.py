@@ -71,14 +71,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for development ease
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from app.api.runs import router as runs_router
+from app.core.errors import ReviewIntelError
+
+# Mount API routers
+app.include_router(runs_router)
+
+
+@app.exception_handler(ReviewIntelError)
+async def review_intel_error_handler(request: Request, exc: ReviewIntelError):
+    """Standardized JSON response for all typed ReviewIntelError exceptions."""
+    return JSONResponse(
+        status_code=exc.http_status,
+        content={"error": exc.to_dict()},
+    )
+
 
 
 @app.get("/health", summary="Health check and configuration probe")
