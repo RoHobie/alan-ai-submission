@@ -33,6 +33,27 @@ _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pipeline_worke
 
 # Cancellation registry to track cooperative stop requests between batches
 _cancel_requested: Dict[str, bool] = {}
+# Active run tracking for graceful SIGTERM shutdown
+_active_run_id: Optional[str] = None
+
+
+def set_active_run_id(run_id: Optional[str]) -> None:
+    """Track the currently executing run ID."""
+    global _active_run_id
+    _active_run_id = run_id
+
+
+def get_active_run_id() -> Optional[str]:
+    """Retrieve the currently executing run ID."""
+    return _active_run_id
+
+
+def handle_sigterm_graceful(signum=None, frame=None):
+    """Signal handler for SIGTERM to cancel active run before shutdown."""
+    active = get_active_run_id()
+    if active:
+        logger.warning("SIGTERM received. Requesting cooperative cancel for active run %s", active)
+        request_run_cancellation(active)
 
 
 def request_run_cancellation(run_id: str) -> bool:
@@ -74,6 +95,7 @@ def execute_pipeline(run_id: str, reuse_snapshot: bool = False, resume_from_stag
     """
     Main orchestration loop executing pipeline stages s01 through s07.
     """
+    set_active_run_id(run_id)
     clear_run_cancellation(run_id)
     logger.info("Starting pipeline execution for run_id=%s (reuse_snapshot=%s, resume=%s)", run_id, reuse_snapshot, resume_from_stage)
 
@@ -163,6 +185,7 @@ def execute_pipeline(run_id: str, reuse_snapshot: bool = False, resume_from_stag
         logger.exception("Unexpected error executing pipeline for run_id=%s: %s", run_id, exc)
         _record_run_failure(run_id, "INTERNAL_ERROR", str(exc), {})
     finally:
+        set_active_run_id(None)
         clear_run_cancellation(run_id)
 
 

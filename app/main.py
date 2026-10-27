@@ -50,8 +50,15 @@ async def lifespan(app: FastAPI):
 
     # Defer import to allow clean modularity
     try:
+        import signal
         from app.core.db import init_db
-        from app.core.runner import recover_interrupted_runs
+        from app.core.runner import handle_sigterm_graceful, recover_interrupted_runs
+
+        try:
+            signal.signal(signal.SIGTERM, handle_sigterm_graceful)
+        except Exception:
+            pass  # Some environments or non-main threads ignore signal registration
+
         init_db()
         interrupted_count = recover_interrupted_runs()
         if interrupted_count > 0:
