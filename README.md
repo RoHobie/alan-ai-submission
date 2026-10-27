@@ -1,87 +1,61 @@
-# Review Intelligence MVP SaaS
+# Review Intelligence MVP
 
-Turn Google Play Store and Apple App Store customer reviews into an actionable, prioritized, version-aware product feedback report powered by Google Gemini and deterministic statistical formulas.
+Turn mobile app reviews from Google Play Store and Apple App Store into an actionable, prioritized, and version-aware product feedback report.
 
 ---
 
-## 1. Architecture Overview
+## Architecture Overview
 
 ```mermaid
 flowchart TD
-    subgraph Store_Sources[Data Sources: India Storefront ('in')]
-        PS[Google Play Store API]
-        AS[Apple App Store Public RSS Feed]
+    subgraph Sources ["Data Sources"]
+        PS["Google Play Store"]
+        AS["Apple App Store"]
     end
 
-    subgraph Pipeline[Pipeline Engine (s01 - s07)]
-        S1[s01_collect: Scrape & Snapshot raw_reviews.csv]
-        S2[s02_clean: NFKC, PII Scrub, Hinglish Script Filter, RapidFuzz Dedupe]
-        S3[s03_sample_taxonomy: Stratified Sample + LLM Taxonomy Discovery]
-        S4[s04_classify: Multi-Label Batch Classification + Checkpointing]
-        S5[s05_reconcile: LLM Proposal Clustering + Expanded Taxonomy]
-        S6[s06_summarize: Proof-Ranking D7 + Deterministic Priority + Executive Synthesis]
-        S7[s07_aggregate: Distributions, Version Progression, Heatmap, Resolution Signals]
+    subgraph Pipeline ["Pipeline Engine"]
+        S1["1. Collect & Snapshot"]
+        S2["2. Clean & Deduplicate"]
+        S3["3. Taxonomy Discovery"]
+        S4["4. Batch Classification"]
+        S5["5. Taxonomy Reconciliation"]
+        S6["6. Summarize & Prioritize"]
+        S7["7. Metrics & Signals"]
     end
 
-    subgraph Persistence[Persistence & Caching]
-        DB[(SQLite WAL: app.db)]
-        CACHE[(SHA-256 Prompt Disk Cache: llm_cache/)]
-        ARTIFACTS[Run Directory: data/runs/run_id/]
+    subgraph Storage ["Storage & Cache"]
+        DB[("SQLite Database")]
+        CACHE[("LLM Prompt Cache")]
+        FILES["Run Artifacts"]
     end
 
-    subgraph Delivery[Delivery & UI]
-        API[FastAPI REST API]
-        DASH[Single-Page Dashboard /dashboard: Alpine.js/Vanilla + Chart.js]
+    subgraph UI ["User Interface"]
+        DASH["Interactive Dashboard"]
     end
 
     PS --> S1
     AS --> S1
     S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
-    S1 -. Snapshot .-> ARTIFACTS
+    S1 -. Snapshot .-> FILES
     S3 -. Cache .-> CACHE
     S4 -. Cache .-> CACHE
     S6 -. Cache .-> CACHE
     Pipeline --> DB
-    Pipeline --> ARTIFACTS
-    DB --> API
-    ARTIFACTS --> API
-    API --> DASH
+    Pipeline --> FILES
+    DB --> DASH
+    FILES --> DASH
 ```
 
 ---
 
-## 2. Key Design Decisions
+## Quickstart
 
-| Decision | Implementation | Rationale |
-|---|---|---|
-| **D1: Stratified Sampling** | Stratify by store × star bucket × version. Clamped to min 150, max 300. | Avoids biasing complaint categories toward a single version or time window. |
-| **D2: Review Type Gate** | Gate into `complaint`, `praise`, `feature_request`, `question`, `spam_or_irrelevant`. | Prevents 5-star compliments from polluting complaint categories. |
-| **D3: Null Bucket** | Stored as `null` for vague complaints lacking actionable detail (e.g. "worst app"). | Distinct from spam/praise; acts as an actionable clarification target list. |
-| **D4: Multi-Label** | Output CSV has one row per (review, category) assignment. | Real-world customer reviews routinely describe multiple distinct issues. |
-| **D5: Taxonomy Reconciliation** | Classification returns proposed categories; clusters them into new categories or maps to `other`. | Captures emerging issues that did not appear in the initial sample. |
-| **D6: Ordinal Scoring** | 1–5 ordinal relevance and severity; score exposed as `relevance / 5.0`. | Self-reported LLM confidence percentages are poorly calibrated. |
-| **D7: Proof Review Ranking** | Composite score: `0.5*rel_norm + 0.2*sev_norm + 0.15*thumbs_norm + 0.15*recency_norm`. | Balances relevance with social proof and freshness. |
-| **D8: State Persistence** | SQLite WAL for status and metadata; CSV/JSON files for auditability. | Fast indexing and clean immutable file exports. |
-| **D9: Reproducibility Contract** | Run dir stores `config.json`, raw snapshot, artifacts, and SHA-256 prompt cache. | Guarantees identical outputs upon snapshot replay with `reuse_snapshot: true`. |
-| **D10: Hinglish Support** | Unicode script ratio (≥70% Latin letters) keeps English & Hinglish. | Preserves the high volume of Hinglish reviews common in the Indian market. |
-| **D11: PII Scrubbing** | Regex strips Indian mobile numbers (`+91`/10-digit 6–9) and email addresses. | User privacy and security before sending text to LLM or dashboard. |
-| **D12: India Storefront Focus** | Country fixed to `in` for both stores. | Streamlines scraping coherence; App Store cap is ~500 for India. |
-| **D13: Gemini Integration** | Google Gemini via official `google-genai` SDK with JSON structured schemas. | Cost-effective, high context window, fast structured generation. |
+### Option A: Docker Compose (Recommended)
 
----
-
-## 3. Quickstart
-
-### Prerequisites
-- Docker & Docker Compose **OR** Python 3.11+
-- Google Gemini API Key (`GEMINI_API_KEY`)
-
-### Option A: Run via Docker Compose (Recommended)
-
-1. Clone and configure environment:
+1. Set up your environment file:
    ```bash
    cp .env.example .env
-   # Edit .env and enter your GEMINI_API_KEY
+   # Add your GEMINI_API_KEY in .env
    ```
 
 2. Start the service:
@@ -89,146 +63,70 @@ flowchart TD
    docker compose up --build
    ```
 
-3. Open your browser:
+3. Open the dashboard in your browser:
    ```
    http://localhost:8000/dashboard
    ```
 
-> **Data Persistence:** Docker Compose utilizes a named volume `review_intel_data` mapped to `/app/data` to ensure all runs, SQLite database records, and LLM caches persist across container restarts. To use a local directory bind mount instead, uncomment `./data:/app/data` in `docker-compose.yml`.
+> Data and LLM prompt caches persist across container restarts using a Docker named volume (`review_intel_data`).
 
-### Option B: Run Locally
+### Option B: Local Setup
 
-1. Create and activate a virtual environment:
+1. Install dependencies:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-2. Set environment variables:
+2. Configure environment:
    ```bash
    export GEMINI_API_KEY="your_api_key_here"
    export LLM_MODEL="gemini-2.5-flash"
    export DATA_DIR="./data"
    ```
 
-3. Run the application:
+3. Start the server:
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 8000
    ```
-   Access the dashboard at `http://localhost:8000/dashboard`.
+   Navigate to `http://localhost:8000/dashboard`.
 
 ---
 
-## 4. CLI Shortcuts & Standalone Execution
+## Features
 
-Every pipeline stage is idempotent and can be executed independently from the command line:
+- **Store Ingestion:** Scrapes reviews from Google Play Store and Apple App Store (India storefront).
+- **Text Sanitization & Deduplication:** NFKC normalization, Indian PII scrubbing (+91 mobile numbers, emails), Hinglish language support, and RapidFuzz near-duplicate removal.
+- **Dynamic Taxonomy Discovery:** Discovers complaint categories from a stratified sample, expanding the taxonomy as new issues emerge.
+- **Multi-Label Classification:** Categorizes complaints with ordinal relevance (1–5) and severity (1–5) scores.
+- **Priority Action Plan:** Deterministic code formula ranks categories by volume share, severity, rating drag, recency, and growth trend.
+- **Interactive Dashboard:** Chart.js visual trends, version progression table, category × version heatmap, proof review citations, and unaddressed feedback exports.
+- **Reproducible Runs:** Immutable run snapshots and SHA-256 prompt caching guarantee deterministic replays.
+
+---
+
+## CLI & Testing
 
 ```bash
-# Execute Stage 1: Review Collection
-python -m app.pipeline.s01_collect --run-id <run_id>
-
-# Execute Stage 2: Data Cleaning & Deduplication
-python -m app.pipeline.s02_clean --run-id <run_id>
-
-# Execute Stage 3: Stratified Taxonomy Discovery
-python -m app.pipeline.s03_sample_taxonomy --run-id <run_id>
-
-# Execute Stage 4: Batch Review Classification
-python -m app.pipeline.s04_classify --run-id <run_id>
-
-# Execute Stage 5: Taxonomy Reconciliation
-python -m app.pipeline.s05_reconcile --run-id <run_id>
-
-# Execute Stage 6: Category Summarization & Action Plan
-python -m app.pipeline.s06_summarize --run-id <run_id>
-
-# Execute Stage 7: Metrics Aggregations & Version Signals
-python -m app.pipeline.s07_aggregate --run-id <run_id>
-```
-
-### Running Tests
-```bash
-# Run complete test suite (unit, API contracts, e2e, reproducibility)
+# Run unit, contract, and e2e integration test suites
 pytest -v
-```
 
-### Running Smoke Test
-```bash
 # Run offline smoke test with synthetic fixtures (no API key needed)
 python scripts/smoke.py --offline --sample-size 50
 
-# Run live smoke test against Swiggy Play Store reviews
+# Run live smoke test against Play Store reviews
 python scripts/smoke.py --app-name "Swiggy" --play-package "in.swiggy.android" --sample-size 50
+
+# Run an individual pipeline stage standalone
+python -m app.pipeline.s04_classify --run-id <run_id>
 ```
 
 ---
 
-## 5. API Reference
+## Key Constraints
 
-All responses use JSON format. Domain errors return standard error structures:
-```json
-{
-  "error": {
-    "code": "APP_NOT_FOUND",
-    "message": "Human readable explanation",
-    "details": {},
-    "retryable": false
-  }
-}
-```
-
-### App Validation
-- `POST /apps/validate`
-  - Validates store package IDs and numeric IDs against official store endpoints.
-  - Body: `{"stores": ["playstore", "appstore"], "play_package": "in.swiggy.android", "appstore_id": "989506690", "app_name": "Swiggy", "country": "in"}`
-  - Returns metadata (icon, current version, rating, reviews count) and App Store search candidates if ID is omitted.
-
-### Run Lifecycle
-- `POST /runs` — Submit and queue an analysis run (returns `201 {"run_id": "...", "status": "queued"}`).
-- `GET /runs` — List analysis runs with status, review counts, and estimated cost.
-- `GET /runs/{run_id}` — Get detailed run state, stage progression checkpoints, timings, warnings, and error details.
-- `GET /runs/{run_id}/logs?lines=100` — Live tail of `data/runs/<run_id>/logs/pipeline.log`.
-- `POST /runs/{run_id}/cancel` — Cooperative cancellation between batches.
-- `POST /runs/{run_id}/resume` — Resume an interrupted or failed run from its last checkpoint.
-- `POST /runs/{run_id}/rerun` — Spawn a new run. Body option `{"reuse_snapshot": true}` replays against prior raw snapshot with hot LLM cache.
-
-### Reporting & Exports
-- `GET /runs/{id}/report` — Unified dashboard payload (executive summary, action plan, charts, issues, unaddressed feedback).
-- `GET /runs/{id}/categories` — List of categories with priority rankings and version signals.
-- `GET /runs/{id}/categories/{cat_id}/reviews?limit=50&sort=score` — Proof reviews supporting a category.
-- `GET /runs/{id}/null-reviews?unaddressed_only=true` — Vague complaints requiring user clarification.
-- `GET /runs/{id}/versions` — Semantic version metrics table.
-- `GET /runs/{id}/export/{artifact}` — Downloadable artifact CSV or JSON (`reviews_clean`, `classifications`, `taxonomy`, `summary`, `aggregates`, `raw_reviews`, `unaddressed_feedback`).
-
----
-
-## 6. Pipeline Stages & Data Contracts
-
-Each analysis run creates an isolated directory in `data/runs/<run_id>/`:
-
-| File | Purpose | Stage |
-|---|---|---|
-| `config.json` | Inputs, random seed, Git SHA, model name, prompt versions | Init / s01 |
-| `raw_reviews.csv` | Immutable scrape snapshot (never modified) | s01_collect |
-| `reviews_clean.csv` | Sanitized, deduplicated, PII-scrubbed reviews | s02_clean |
-| `taxonomy.json` | Discovered complaint categories from stratified sample | s03_sample_taxonomy |
-| `classifications.csv` | Multi-label assignments with relevance and severity | s04_classify |
-| `classification_batches/` | Checkpointed batch JSON files for crash recovery | s04_classify |
-| `taxonomy_final.json` | Reconciled taxonomy with clustered categories | s05_reconcile |
-| `summary.json` | Executive summary, category deep-dives, action plan | s06_summarize |
-| `aggregates.json` | Chart data, version table, heatmap, version signals | s07_aggregate |
-| `llm_cache/` | SHA-256 prompt-keyed cached responses (D9) | s03, s04, s05, s06 |
-| `logs/pipeline.log` | Execution log stream | All |
-
----
-
-## 7. Known Constraints & Design Limitations
-
-1. **Apple App Store Review Cap (~500 for India):** The public Apple iTunes RSS feed serves a maximum of 10 pages × 50 entries = ~500 reviews for any specific storefront country (`country=in`). If a user requests a sample size of 1000 across both stores, the system scrapes up to 1000 from Play Store and caps at ~500 for App Store, issuing a `STORE_LIMIT_REACHED` warning.
-2. **Apple RSS Developer Replies:** Public App Store RSS feeds do not contain developer responses. App Store reviews set `dev_reply=""` and `has_dev_reply=null` (unknown). The UI labels these as "N/A for App Store" rather than claiming unaddressed.
-3. **Single Uvicorn Worker Design:** The server runs with a single worker (`--workers 1`) to preserve SQLite Write-Ahead Logging (WAL) concurrency and ensure the background thread executor safely manages pipeline execution without database lock contention.
-4. **Heuristic Version Signals:** Version trajectory signals (`likely_resolved`, `regression`, `persistent`) are mathematical heuristics comparing relative complaint share between release versions; they are labeled as heuristic insights, not certified facts.
-5. **India Storefront Focus (v1):** Both Play Store and App Store are locked to `country="in"`. Multi-country storefront aggregation is planned for v2.
-6. **Gemini Free-Tier Rate Limits:** The system limits concurrency to `MAX_LLM_CONCURRENCY=3` by default with exponential backoff on HTTP 429 quota responses.
+- **India Storefront Focus:** Country is fixed to `in` for both stores in v1.
+- **App Store Volume Cap:** Apple's public RSS feed is capped at 10 pages (~500 reviews max).
+- **Apple Developer Replies:** Public App Store RSS feeds do not expose developer responses; iOS reviews are marked `has_dev_reply=null` ("N/A for App Store").
+- **Single Worker Process:** The web process runs with a single Uvicorn worker to preserve SQLite WAL concurrency and sequential background execution.
