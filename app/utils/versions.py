@@ -63,6 +63,6 @@ def version_sort_key(version_str: str) -> Tuple[int, Tuple[int, ...], str]:
 
 
 def sort_versions(versions: List[str], reverse: bool = False) -> List[str]:
-    """Sort a list of version strings semantically."""
-    unique_versions = list(set(versions))
+    """Sort a list of version strings semantically, returning clean normalized versions."""
+    unique_versions = list(set(normalize_version(v) for v in versions if v))
     return sorted(unique_versions, key=version_sort_key, reverse=reverse)

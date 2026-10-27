@@ -245,6 +245,7 @@ def rerun_run(run_id: str, payload: Optional[RerunRequest] = None, db: Session =
         # Copy existing LLM cache entries
         prev_cache_dir = prev_run_dir / "llm_cache"
         new_cache_dir = new_run_dir / "llm_cache"
+        new_cache_dir.mkdir(parents=True, exist_ok=True)
         if prev_cache_dir.exists():
             for item in prev_cache_dir.glob("*.json"):
                 shutil.copy2(item, new_cache_dir / item.name)

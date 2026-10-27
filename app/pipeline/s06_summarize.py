@@ -294,6 +294,7 @@ def run_stage(run_id: str) -> Dict[str, Any]:
         }
 
     # 2. Executive Synthesis across prioritized categories
+    overall_avg_rating = pd.to_numeric(df_clean["rating"], errors="coerce").fillna(3).mean()
     ranking_lines = []
     for item in ranked_priorities:
         ranking_lines.append(
